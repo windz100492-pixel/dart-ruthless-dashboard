@@ -1,0 +1,6 @@
+# .gitignore 내용에 추가
+.streamlit/secrets.toml
+__pycache__/
+*.pyc
+.venv/
+venv/
