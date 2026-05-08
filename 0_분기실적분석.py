@@ -17,6 +17,17 @@ import json
 import time
 from typing import Dict, Tuple, Any, Optional
 import requests
+from bs4 import BeautifulSoup
+import io
+import traceback
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from webdriver_manager.chrome import ChromeDriverManager
+import time
 
 # ==========================================
 # [HARNESS CORE] 0. Hardcore Local Caching Engine
@@ -215,274 +226,207 @@ class DartCoreClient:
             
             return df[df['Year'] >= display_start_year], stock, corp_name, stock_code, corp_code
 
-# ==========================================
-# [HARNESS CORE] 2. Deterministic Inference Engine
-# ==========================================
 class RuthlessInferenceEngine:
     @staticmethod
     def analyze_dupont(df: pd.DataFrame) -> Dict[str, Any]:
-        if len(df) < 4:
-            return {"status": "error", "message": "데이터 부족. 추론 불가."}
-            
+        if len(df) < 4: return {"status": "error", "message": "데이터 부족. 추론 불가."}
         latest = df.iloc[-1]
         prev_year = df.iloc[-5] if len(df) >= 5 else df.iloc[0]
-        
         roe = latest['ROE']
         margin = latest['NI_Margin']
         turnover = latest['Asset_Turnover']
         leverage = latest['Leverage']
-        
         margin_trend = margin - prev_year['NI_Margin']
         turnover_trend = turnover - prev_year['Asset_Turnover']
         leverage_trend = leverage - prev_year['Leverage']
-
         synthesis = {}
-        if roe > 15 and leverage < 2.0 and margin > 10:
-            synthesis = {"level": "success", "title": f"[초우량 등급] 종합 ROE {roe:.1f}%", "desc": "부채(레버리지)에 의존하지 않고, 압도적인 마진과 자산 효율성으로 만들어낸 진짜 수익이다."}
-        elif roe > 10 and leverage > 2.5:
-            synthesis = {"level": "warning", "title": f"[주의 요망] 종합 ROE {roe:.1f}%", "desc": "겉보기엔 준수해 보이나, 속 빈 강정이다. 이익률이나 회전율의 결함을 빚(부채)으로 가리고 있다."}
-        elif roe < 5 or margin < 0:
-            synthesis = {"level": "error", "title": f"[투자 부적격] 종합 ROE {roe:.1f}%", "desc": "자본 비용조차 못 건지는 상태다. 기업의 아키텍처가 무너졌다."}
-        else:
-            synthesis = {"level": "info", "title": f"[무난/관망] 종합 ROE {roe:.1f}%", "desc": "치명적인 누수는 없으나, 시장을 압도할 만한 퍼포먼스도 보이지 않는 평범한 상태다."}
-
+        if roe > 15 and leverage < 2.0 and margin > 10: synthesis = {"level": "success", "title": f"[초우량 등급] 종합 ROE {roe:.1f}%", "desc": "부채에 의존하지 않고, 압도적인 마진과 자산 효율성으로 만들어낸 진짜 수익이다."}
+        elif roe > 10 and leverage > 2.5: synthesis = {"level": "warning", "title": f"[주의 요망] 종합 ROE {roe:.1f}%", "desc": "겉보기엔 준수해 보이나, 속 빈 강정이다. 이익률이나 회전율의 결함을 빚으로 가리고 있다."}
+        elif roe < 5 or margin < 0: synthesis = {"level": "error", "title": f"[투자 부적격] 종합 ROE {roe:.1f}%", "desc": "자본 비용조차 못 건지는 상태다. 기업의 아키텍처가 무너졌다."}
+        else: synthesis = {"level": "info", "title": f"[무난/관망] 종합 ROE {roe:.1f}%", "desc": "치명적인 누수는 없으나, 시장을 압도할 만한 퍼포먼스도 보이지 않는 평범한 상태다."}
         details = []
-        if margin > 15: details.append(f"🟢 **압도적 마진율**: 순이익률 `{margin:.1f}%`. 강력한 해자.")
+        if margin > 15: details.append(f"🟢 **압도적 마진율**: 순이익률 `{margin:.1f}%`.")
         elif margin_trend < -3: details.append(f"🔴 **수익성 훼손**: 순이익률 전년비 `{margin_trend:+.1f}%p` 급감.")
         else: details.append(f"⚪ **마진율 평이**: 순이익률 `{margin:.1f}%`.")
-
         if turnover_trend < -0.1 and turnover < 0.5: details.append(f"🔴 **자산 비효율 경고**: 자산회전율 `{turnover:.2f}배` 우하향.")
         elif turnover > 1.0: details.append(f"🟢 **극한의 인프라 효율**: 자산회전율 `{turnover:.2f}배`.")
         else: details.append(f"⚪ **자산 효율성 평이**: 자산회전율 `{turnover:.2f}배`.")
-
         if leverage > 2.5: details.append(f"🔴 **부채 영끌 주의보**: 재무레버리지 `{leverage:.1f}배` 위험 수위.")
         elif leverage_trend > 0.5 and roe > 10: details.append(f"🟡 **레버리지 주도 성장**: 부채 비중 최근 급증.")
         else: details.append(f"🟢 **재무 건전성 방어**: 재무레버리지 `{leverage:.1f}배`.")
-
         return {"status": "success", "synthesis": synthesis, "details": details}
 
-
 # ==========================================
-# [DATA LAYER] 네이버 금융 컨센서스 자동 스크래핑 엔진 (V11 - Precision Strike)
+# [DATA LAYER] 셀레니움 기반 WiseReport 동기화 엔진 (V24 - The Time Lord)
 # ==========================================
-import requests
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from webdriver_manager.chrome import ChromeDriverManager
+import time
+import re
+import pandas as pd
 from bs4 import BeautifulSoup
+import traceback
 
+# ==========================================
+# [DATA LAYER] 1. 글로벌 셀레니움 드라이버 (캐싱 엔진)
+# ==========================================
+@st.cache_resource(show_spinner=False)
+def get_global_driver():
+    """
+    서버가 켜질 때 최초 1회만 백그라운드 크롬을 부팅하고,
+    이후 접속부터는 이 살아있는 크롬 브라우저를 계속 돌려쓴다. (속도 비약적 향상)
+    """
+    options = Options()
+    options.add_argument('--headless')
+    options.add_argument('--disable-gpu')
+    options.add_argument('--no-sandbox')
+    options.add_argument('--disable-dev-shm-usage')
+    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+    
+    service = Service(ChromeDriverManager().install())
+    driver = webdriver.Chrome(service=service, options=options)
+    return driver
+
+# ==========================================
+# [DATA LAYER] 셀레니움 초고속 스마트 폴링 엔진 (V26 - Light Speed Polling)
+# ==========================================
 @st.cache_data(ttl=3600, show_spinner=False)
-def fetch_naver_consensus(stock_code):
-    """
-    네이버 wisereport 'Financial Summary' 분기 탭에서 분기 추정치를 모두 추출.
-    - 데이터 소스: navercomp.wisereport.co.kr (Financial Summary)
-    - finance.naver.com 메인의 cop_analysis 표는 분기 (E) 1개뿐이라 부적합.
-    반환: ([(period, rev_억, op_억), ...], 상태메시지)
-    """
-    url = f"https://navercomp.wisereport.co.kr/v2/company/c1010001.aspx?cmp_cd={stock_code}"
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-        'Referer': f'https://finance.naver.com/item/coinfo.naver?code={stock_code}'
-    }
+def fetch_wisereport_consensus(stock_code, baseline_rev=1e12):
+    debug = ["🌐 Selenium: Global Chrome 재사용 중... (V26 초고속 폴링)"]
+    
+    try:
+        driver = get_global_driver()
+    except Exception as e:
+        debug.append(f"💥 브라우저 초기화 실패: {e}")
+        return [], "[실패] 브라우저 초기화 실패", debug
 
     try:
-        res = requests.get(url, headers=headers, timeout=10)
-        res.raise_for_status()
-        soup = BeautifulSoup(res.content, 'html.parser')
+        url = f"https://navercomp.wisereport.co.kr/v2/company/c1010001.aspx?cmp_cd={stock_code}&finGubun=MAIN&frq=1"
+        driver.get(url)
 
-        # ============================================================
-        # 분기 테이블 식별: 헤더에 'YYYY/MM' 형식 컬럼이 5개 이상인 table
-        # (wisereport 페이지에는 연간/분기 두 테이블이 함께 있음)
-        # ============================================================
-        quarterly_pattern = re.compile(r'(\d{4})[/.](\d{2})')
-        target_table = None
+        # 1. 무조건적인 time.sleep 삭제. 요소가 나타나면 즉시 클릭한다.
+        try:
+            tabs = WebDriverWait(driver, 3).until(
+                EC.presence_of_all_elements_located((By.XPATH, "//a[contains(text(), '분기')]"))
+            )
+            for tab in tabs:
+                if tab.is_displayed():
+                    driver.execute_script("arguments[0].click();", tab)
+                    debug.append("🖱️ '분기' 탭 즉시 클릭 완료. (스마트 폴링 가동)")
+                    break
+        except Exception:
+            pass # 탭이 이미 클릭되어 있거나 못 찾아도 일단 파싱 돌격
 
-        for table in soup.find_all('table'):
-            ths = table.find_all('th')
-            quarterly_cells = [th for th in ths if quarterly_pattern.search(th.get_text())]
-            if len(quarterly_cells) >= 5:
-                target_table = table
-                break
-
-        if target_table is None:
-            return [], "[실패] wisereport 분기 테이블 미발견 (마크업 변경 의심)"
-
-        # 헤더에서 분기 컬럼만 순서대로 수집 (rowspan 빈셀 제외)
-        thead = target_table.find('thead')
-        if not thead:
-            return [], "[실패] thead 없음"
-
-        quarter_headers = []
-        for th in thead.find_all('th'):
-            text = th.get_text(strip=True)
-            if quarterly_pattern.search(text):
-                quarter_headers.append(text)
-
-        # 분기 헤더 중 (E)/(P) 마킹된 컬럼 인덱스 추출
-        est_indices = [(i, t) for i, t in enumerate(quarter_headers)
-                       if '(E)' in t or '(P)' in t]
-        if not est_indices:
-            return [], f"[실패] 분기 (E)/(P) 없음 (헤더={quarter_headers})"
-
-        # ============================================================
-        # tbody에서 매출액 / 영업이익(발표기준 우선) 행 찾기
-        # wisereport는 영업이익이 두 종류 (일반 / 발표기준), (E)는 발표기준에만 채워짐
-        # ============================================================
-        tbody = target_table.find('tbody')
-        if not tbody:
-            return [], "[실패] tbody 없음"
-
-        rev_tds = None
-        op_tds = None
-        op_announce_tds = None
-
-        for row in tbody.find_all('tr'):
-            th = row.find('th')
-            if not th:
-                continue
-            row_name = th.get_text(strip=True).replace(' ', '').replace('\xa0', '')
-
-            if row_name == '매출액' and rev_tds is None:
-                rev_tds = row.find_all('td')
-            elif row_name == '영업이익(발표기준)' and op_announce_tds is None:
-                op_announce_tds = row.find_all('td')
-            elif row_name == '영업이익' and op_tds is None:
-                op_tds = row.find_all('td')
-
-        # 발표기준 우선, 없으면 일반 영업이익
-        op_final = op_announce_tds if op_announce_tds is not None else op_tds
-
-        if rev_tds is None or op_final is None:
-            return [], "[실패] 매출/영업이익 행 매칭 실패"
-
-        # ============================================================
-        # 각 (E) 컬럼에서 값 추출
-        # 주의: tbody의 td 인덱스가 thead의 분기 헤더 인덱스와 1:1 매핑되어야 함
-        # (wisereport는 보통 한 테이블에 분기만 있어 이 가정이 성립)
-        # ============================================================
+        # 2. [Architect Fix] 스마트 폴링 (0.5초 간격으로 최대 10회 탐색)
+        # 네이버 서버가 데이터를 뱉어내는 그 '0.X초'의 순간을 캐치하여 즉시 탈출한다.
         results = []
-        for idx, period in est_indices:
-            if idx >= len(rev_tds) or idx >= len(op_final):
-                continue
-            rv = rev_tds[idx].get_text(strip=True).replace(',', '')
-            ov = op_final[idx].get_text(strip=True).replace(',', '')
-            try:
-                rv_f = float(rv) if rv and rv != '-' else 0.0
-                ov_f = float(ov) if ov and ov != '-' else 0.0
-                if rv_f > 0:
-                    results.append((period, rv_f, ov_f))
-            except ValueError:
-                continue
+        for attempt in range(10):
+            time.sleep(0.5)
+            html = driver.page_source
+            soup = BeautifulSoup(html, 'html.parser')
 
-        if not results:
-            return [], "[실패] 추정치 파싱 결과 0건"
-        return results, f"성공 ({len(results)}개 분기 자동 로드)"
+            target_table = None
+            for table in soup.find_all('table'):
+                text = table.get_text()
+                if '매출액' in text and '영업이익' in text and ('(E)' in text or '(P)' in text):
+                    months = set(re.findall(r'\d{4}[./](\d{2})', text))
+                    if len(months) >= 2:
+                        target_table = table
+                        break
+                        
+            if not target_table: continue
+
+            thead = target_table.find('thead')
+            if not thead: continue
+
+            header_texts = []
+            for tr in thead.find_all('tr'):
+                ths = tr.find_all(['th', 'td'])
+                texts = [th.get_text(strip=True) for th in ths if re.search(r'\d{4}[./]\d{2}', th.get_text())]
+                if len(texts) > len(header_texts):
+                    header_texts = texts
+                    
+            est_indices = [(i, h) for i, h in enumerate(header_texts) if '(E)' in h or '(P)' in h]
+            
+            tbody = target_table.find('tbody')
+            if not tbody: continue
+
+            rev_tds, op_tds, op_announce_tds = None, None, None
+            for row in tbody.find_all('tr'):
+                cells = row.find_all(['th', 'td'])
+                if not cells: continue
+                
+                row_name = cells[0].get_text(strip=True).replace(' ', '').replace('\xa0', '')
+                tds = row.find_all('td')
+                
+                if '매출액' == row_name and rev_tds is None:
+                    rev_tds = tds
+                elif '영업이익(발표기준)' == row_name and op_announce_tds is None:
+                    op_announce_tds = tds
+                elif '영업이익' == row_name and op_tds is None:
+                    op_tds = tds
+
+            final_op_tds = op_announce_tds if op_announce_tds else op_tds
+            if not rev_tds or not final_op_tds: continue
+            
+            offset_rev = len(rev_tds) - len(header_texts)
+            offset_op = len(final_op_tds) - len(header_texts)
+
+            # 임시 배열에 데이터를 담아본다
+            temp_results = []
+            for idx, col_name in est_indices:
+                r_idx = idx + offset_rev
+                o_idx = idx + offset_op
+                
+                if r_idx < 0 or r_idx >= len(rev_tds) or o_idx < 0 or o_idx >= len(final_op_tds):
+                    continue
+                    
+                rv_str = rev_tds[r_idx].get_text(strip=True).replace(',', '')
+                ov_str = final_op_tds[o_idx].get_text(strip=True).replace(',', '')
+                
+                try:
+                    rv_f = float(rv_str) if rv_str and rv_str not in ['-', 'nan', 'NaN'] else 0.0
+                    ov_f = float(ov_str) if ov_str and ov_str not in ['-', 'nan', 'NaN'] else 0.0
+                except ValueError:
+                    continue
+                    
+                if rv_f > 0:
+                    # 연간/반기 데이터 필터링
+                    if baseline_rev > 1000 and rv_f > baseline_rev * 2.5:
+                        continue
+                    temp_results.append((col_name, rv_f, ov_f))
+
+            # 🎯 [핵심 로직] 추출된 결과가 2개 이상인가? = AJAX 로딩이 완전히 끝난 진짜 '분기 표'다!
+            # 무의미한 대기를 찢어버리고 즉시 함수를 종료하며 탈출한다.
+            if len(temp_results) >= 2:
+                debug.append(f"⚡ 쾌속 렌더링 감지: {attempt+1}회차 (약 {(attempt+1)*0.5}초) 만에 스크래핑 완료!")
+                return temp_results, f"성공 ({len(temp_results)}개 분기 로드)", debug
+            
+            # 실패했다면 (AJAX 로딩 중이라면) temp_results를 버리고 다음 0.5초 뒤를 노린다.
+            results = temp_results
+
+        # 10회(5초)를 다 돌았는데도 탈출하지 못했다면, 지금까지 얻은 거라도 던져준다.
+        debug.append("⚠️ 쾌속 탈출 실패. (타임아웃)")
+        return results, f"성공 ({len(results)}개 로드)", debug
 
     except Exception as e:
-        return [], f"[에러] {str(e)}"
-
-def fetch_naver_consensus_v3(stock_code):
-    """[v3] cop_analysis 기반 - 분기 (E) 추출 (list 반환)"""
-    url = f"https://finance.naver.com/item/main.naver?code={stock_code}"
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-    }
-    debug = []
-
-    try:
-        res = requests.get(url, headers=headers, timeout=10)
-        res.raise_for_status()
-        soup = BeautifulSoup(res.content, 'html.parser')
-
-        analysis_div = soup.find('div', class_='cop_analysis')
-        if not analysis_div:
-            return [], "[실패] cop_analysis 없음", debug
-
-        thead = analysis_div.find('thead')
-        if not thead:
-            return [], "[실패] thead 없음", debug
-
-        header_rows = thead.find_all('tr')
-        if len(header_rows) < 2:
-            return [], "[실패] 헤더 비정상", debug
-
-        # 분기 영역 시작 (colspan 누적)
-        top_ths = header_rows[0].find_all('th')
-        quarterly_start = -1
-        cum = 0
-        for th in top_ths:
-            if th.get('rowspan'):
-                continue
-            text = th.get_text(strip=True)
-            colspan = int(th.get('colspan', '1'))
-            if '분기' in text:
-                quarterly_start = cum
-                break
-            cum += colspan
-
-        date_headers = header_rows[1].find_all('th')
-        if quarterly_start < 0:
-            quarterly_start = max(0, len(date_headers) - 4)
-
-        debug.append(f"📅 분기 시작: idx={quarterly_start}")
-        all_headers = [th.get_text(strip=True) for th in date_headers]
-        debug.append(f"📅 전체 헤더: {all_headers}")
-
-        # 분기 영역에서 (E)/(P) 모두 수집
-        est_columns = []
-        for i in range(quarterly_start, len(date_headers)):
-            text = date_headers[i].get_text(strip=True)
-            if '(E)' in text or '(P)' in text:
-                est_columns.append((i, text))
-
-        debug.append(f"🎯 (E) 컬럼: {est_columns}")
-
-        if not est_columns:
-            return [], f"[실패] 분기 (E)/(P) 없음", debug
-
-        tbody = analysis_div.find('tbody')
-        if not tbody:
-            return [], "[실패] tbody 없음", debug
-
-        rev_tds, op_tds = None, None
-        for row in tbody.find_all('tr'):
-            th = row.find('th')
-            if not th: continue
-            rn = th.get_text(strip=True).replace(' ', '').replace('\xa0', '')
-            if rn == '매출액' and rev_tds is None:
-                rev_tds = row.find_all('td')
-            elif rn == '영업이익' and op_tds is None:
-                op_tds = row.find_all('td')
-
-        if not rev_tds or not op_tds:
-            return [], "[실패] 행 매칭 실패", debug
-
-        results = []
-        for idx, period in est_columns:
-            if idx >= len(rev_tds) or idx >= len(op_tds):
-                continue
-            rv = rev_tds[idx].get_text(strip=True).replace(',', '')
-            ov = op_tds[idx].get_text(strip=True).replace(',', '')
-            try:
-                rv_f = float(rv) if rv and rv != '-' else 0.0
-                ov_f = float(ov) if ov and ov != '-' else 0.0
-                if rv_f > 0:
-                    results.append((period, rv_f, ov_f))
-            except ValueError:
-                continue
-
-        debug.append(f"✅ 결과: {len(results)}개 → {[(p, r, o) for p, r, o in results]}")
-
-        if not results:
-            return [], "[실패] 파싱 결과 0건", debug
-        return results, f"성공 ({len(results)}개 분기 자동)", debug
-
-    except Exception as e:
-        debug.append(f"❌ {e}")
+        debug.append(f"💥 치명적 에러: {traceback.format_exc()}")
         return [], f"[에러] {str(e)}", debug
+
 
 # ==========================================
 # [PRESENTATION] Streamlit UI Layer
 # ==========================================
 st.set_page_config(page_title="DART Financial Dashboard", layout="wide")
 
+# ============================================================
+# [Architect Fix] 실수로 누락했던 비동기 DART 데이터 로더 브릿지 복구
+# ============================================================
 def run_async_safe(coroutine):
     try: loop = asyncio.get_running_loop()
     except RuntimeError: loop = None
@@ -493,6 +437,7 @@ def run_async_safe(coroutine):
 def load_data(api_key, query, years):
     client = DartCoreClient(api_key)
     return run_async_safe(client.fetch_all_data(query, years))
+# ============================================================
 
 def render_dashboard():
     st.title("📊 DART 분석 대시보드 (Optimized Architecture)")
@@ -504,9 +449,6 @@ def render_dashboard():
     except Exception:
         pass
 
-    # ==========================================
-    # 1. 사이드바 (상단): 검색 폼 렌더링
-    # ==========================================
     with st.sidebar:
         st.header("설정")
         with st.form(key='search_form'):
@@ -522,15 +464,18 @@ def render_dashboard():
         if not api_key:
             st.error("API Key 누락. 인증 없는 요청은 네트워크 I/O 낭비다.")
             return
-        load_data.clear()
+        st.cache_data.clear()
         with st.spinner("데이터 패치 및 연산 중..."):
             try:
                 # DART 데이터 로드
                 df, stock, corp_name, stock_code, corp_code = load_data(api_key, query, years)
                 st.session_state.update({'df': df, 'stock': stock, 'corp_name': corp_name, 'stock_code': stock_code})
 
-                # v3 함수 호출 (ajax 엔드포인트 직접 호출)
-                naver_ests, msg, debug = fetch_naver_consensus_v3(stock_code)
+                # [Architect Fix] 완벽한 스케일 필터링을 위해 DART의 '직전 분기 실제 매출액'을 베이스라인으로 계산해 주입
+                baseline_rev = df['Rev'].iloc[-1] / 1e8 if not df.empty else 1e12
+
+                # FnGuide 컨센서스 전용 서버 스크래핑 엔진 가동
+                naver_ests, msg, debug = fetch_wisereport_consensus(stock_code, baseline_rev)
                 st.session_state['naver_estimates'] = naver_ests
                 st.session_state['consensus_msg'] = msg
                 st.session_state['naver_debug'] = debug
@@ -543,17 +488,13 @@ def render_dashboard():
                 st.error(f"런타임 에러: {e}")
                 return
 
-    # ==========================================
-    # 3. 사이드바 (하단): 컨센서스 UI 렌더링 (최신화된 세션 데이터 반영)
-    # ==========================================
     with st.sidebar:
         st.markdown("---")
         st.subheader("🔮 다음 분기 컨센서스 (E)")
 
-        # 디버그 정보 노출 (스크래핑 진단용)
         debug_lines = st.session_state.get('naver_debug', [])
         if debug_lines:
-            with st.expander("🔍 스크래핑 디버그"):
+            with st.expander("🔍 스크래핑 디버그 (텔레메트리)"):
                 for line in debug_lines:
                     st.caption(line)
 
@@ -562,7 +503,7 @@ def render_dashboard():
 
         if naver_ests:
             periods_str = ' / '.join([e[0] for e in naver_ests])
-            st.caption(f"✅ 네이버 자동 로드: **{periods_str}**")
+            st.caption(f"✅ 자동 로드: **{periods_str}**")
         else:
             st.caption(f"⚠️ {msg or '컨센서스 없음. 수동 입력하세요.'}")
 
@@ -573,7 +514,6 @@ def render_dashboard():
             auto_label = f" *(자동: {naver_ests[i][0]})*" if i < len(naver_ests) else " *(수동)*"
             st.markdown(f"**Q+{i+1}**{auto_label}")
 
-            # 첫 렌더 디폴트 (session_state에 키가 없을 때만 박는다)
             if f'e_rev_{i}' not in st.session_state:
                 st.session_state[f'e_rev_{i}'] = float(naver_ests[i][1]) if i < len(naver_ests) else 0.0
             if f'e_op_{i}' not in st.session_state:
@@ -581,16 +521,11 @@ def render_dashboard():
 
             c1, c2 = st.columns(2)
             with c1:
-                r = st.number_input("매출(억)", step=100.0,
-                                    key=f"e_rev_{i}", label_visibility="collapsed")
+                r = st.number_input("매출(억)", step=100.0, key=f"e_rev_{i}", label_visibility="collapsed")
             with c2:
-                o = st.number_input("영업익(억)", step=10.0,
-                                    key=f"e_op_{i}", label_visibility="collapsed")
+                o = st.number_input("영업익(억)", step=10.0, key=f"e_op_{i}", label_visibility="collapsed")
             estimates.append((r, o))
 
-    # ==========================================
-    # 4. 메인 뷰 (차트 렌더링)
-    # ==========================================
     if 'df' in st.session_state:
         df = st.session_state['df'].copy() 
         stock = st.session_state['stock']
@@ -599,9 +534,6 @@ def render_dashboard():
         
         st.subheader(f"{corp_name} ({stock_code}) - {years}년 재무 및 주가 추이")
         
-        # ============================================================
-        # 다중 추정 분기 행 추가 (datetime 인덱스로 안전하게)
-        # ============================================================
         estimates_active = [(r, o) for r, o in estimates if r > 0 and o > 0]
         n_estimated = len(estimates_active)
 
@@ -613,15 +545,11 @@ def render_dashboard():
                 e_rev_won = e_rev * 1e8
                 e_op_won = e_op * 1e8
 
-                # QoQ: 직전 분기 (i==0이면 실제 마지막, 아니면 직전 추정치)
                 prev_rev_won = df['Rev'].iloc[-1] if i == 0 else estimates_active[i-1][0] * 1e8
-
-                # YoY: 4분기 전 (원본 df 기준 위치)
                 yr_idx = n_orig - 4 + i
                 prev_yr_rev_won = df['Rev'].iloc[yr_idx] if 0 <= yr_idx < n_orig else np.nan
 
-                e_yoy = ((e_rev_won - prev_yr_rev_won) / prev_yr_rev_won) * 100 \
-                        if pd.notna(prev_yr_rev_won) and prev_yr_rev_won != 0 else 0
+                e_yoy = ((e_rev_won - prev_yr_rev_won) / prev_yr_rev_won) * 100 if pd.notna(prev_yr_rev_won) and prev_yr_rev_won != 0 else 0
                 e_qoq = ((e_rev_won - prev_rev_won) / prev_rev_won) * 100 if prev_rev_won != 0 else 0
                 e_opm = (e_op_won / e_rev_won) * 100 if e_rev_won != 0 else 0
 
@@ -634,11 +562,11 @@ def render_dashboard():
                     'Asset_Turnover': [df['Asset_Turnover'].iloc[-1]],
                     'Leverage': [df['Leverage'].iloc[-1]]
                 }, index=[next_date])
+                
                 df = pd.concat([df, new_row])
 
             df.index = pd.to_datetime(df.index)
 
-        # 색상 배열 - 추정 분기들만 진하게
         rev_colors = ["rgba(231, 76, 60, 0.35)"] * len(df)
         yoy_colors = ["rgba(52, 73, 94, 0.6)"] * len(df)
         qoq_colors = ["rgba(142, 68, 173, 0.5)"] * len(df)
@@ -677,7 +605,6 @@ def render_dashboard():
         fig.update_yaxes(title_text="매출 QoQ (%)", secondary_y=False, row=3, col=1, showgrid=True, gridcolor='rgba(0,0,0,0.1)', zeroline=True, zerolinecolor='black')
         fig.update_yaxes(title_text="영업이익률 (%)", secondary_y=True, row=3, col=1, showgrid=False)
 
-        # 추정 분기 모두에 'E' 마커
         for k in range(1, n_estimated + 1):
             fig.add_annotation(
                 x=df.index[-k], y=df['Rev'].iloc[-k] / 1e8,
@@ -688,9 +615,6 @@ def render_dashboard():
             )
 
         fig.update_xaxes(showgrid=True, gridcolor='rgba(0,0,0,0.1)', dtick="M12", tickformat="%Y년")
-        
-        fig.update_xaxes(showgrid=True, gridcolor='rgba(0,0,0,0.1)', dtick="M12", tickformat="%Y년")
-
         st.plotly_chart(fig, use_container_width=True)
 
         st.divider()
